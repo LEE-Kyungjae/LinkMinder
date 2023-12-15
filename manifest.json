@@ -1,0 +1,11 @@
+{
+    "manifest_version": 3,
+    "name": "탭저장소",
+    "description": "내가 사용하려고 만든 구글 확장프로그램. 마우스 오른쪽버튼을 이용하거나 단축키를 이용하여 열람중인 탭의 링크를 확장프로그램에 저장하고 원할때 확장프로그램 버튼을 클릭해서 확인할수있음",
+
+    "version": "1.0",
+    "action": {
+      "default_popup": "hello.html",
+      "default_icon": "hello_extensions.png"
+    }
+  }
