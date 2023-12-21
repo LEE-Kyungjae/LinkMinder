@@ -5,10 +5,24 @@
 
     "version": "1.0",
     "action": {
-      "default_popup": "hello.html",
+      "default_popup": "popup.html",
       "default_icon": "hello_extensions.png"
     },
     "permissions": [
-        "nativeMessaging"
-      ]
-  }
+        "nativeMessaging",
+        "storage"
+      ],
+    "content_security_policy":{
+      "extension_pages":"script-src 'self'"
+    },
+    "background": {
+      "service_worker": "background.js"
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["libs/jquery-3.6.4.min.js", "content_script.js"]
+      }
+    ]
+
+}
