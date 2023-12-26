@@ -1,4 +1,1 @@
-chrome.runtime.getURL(
-    path:
-    string,
-  )
+"use strict";

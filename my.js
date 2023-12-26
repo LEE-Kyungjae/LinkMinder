@@ -1,3 +1,4 @@
+"use strict";
 let data = [
   { tabname: "11", link: "11", active: "11" },
   { tabname: "22", link: "22", active: "22" },
