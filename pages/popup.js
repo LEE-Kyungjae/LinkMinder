@@ -977,12 +977,277 @@ function renderTree(filtered) {
     renderEmpty("조건에 맞는 링크가 없습니다.");
     return;
   }
-  const fragment = document.createDocumentFragment();
-  tree.forEach((categoryNode) => {
-    fragment.append(renderTreeNode(categoryNode, 0));
+
+  const tagCache = new Map();
+  const UNTAGGED_TAG_ID = "__untagged__";
+  const MAX_TAGS = 6;
+
+  const getTagsForGroup = (group) => {
+    if (tagCache.has(group.id)) {
+      return tagCache.get(group.id);
+    }
+    const map = new Map();
+    (group.children ?? []).forEach((node) => {
+      const data = node.link;
+      if (!data) {
+        return;
+      }
+      const tags = Array.isArray(data.tags) && data.tags.length ? data.tags : [UNTAGGED_TAG_ID];
+      tags.forEach((tag) => {
+        const key = tag;
+        if (!map.has(key)) {
+          map.set(key, {
+            id: key,
+            label: key === UNTAGGED_TAG_ID ? "태그 없음" : key,
+            count: 0,
+            linkNodes: []
+          });
+        }
+        const entry = map.get(key);
+        entry.count += 1;
+        entry.linkNodes.push(node);
+      });
+    });
+
+    let entries = Array.from(map.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+    if (entries.length > MAX_TAGS) {
+      const extras = entries.slice(MAX_TAGS - 1);
+      const otherNodes = extras.flatMap((entry) => entry.linkNodes);
+      entries = entries.slice(0, MAX_TAGS - 1);
+      if (otherNodes.length) {
+        entries.push({
+          id: `${group.id}__others`,
+          label: "기타",
+          count: otherNodes.length,
+          linkNodes: otherNodes
+        });
+      }
+    }
+
+    tagCache.set(group.id, entries);
+    return entries;
+  };
+
+  const layout = document.createElement("div");
+  layout.className = "tree-layout";
+
+  tree.forEach((category) => {
+    const section = document.createElement("section");
+    section.className = "tree-category";
+
+    const header = document.createElement("header");
+    header.className = "tree-category__header";
+    const title = document.createElement("h3");
+    title.textContent = category.label;
+    const countBadge = document.createElement("span");
+    countBadge.className = "tree-category__count";
+    countBadge.textContent = `${category.count}`;
+    header.append(title, countBadge);
+
+    const groupBar = document.createElement("div");
+    groupBar.className = "tree-groups";
+    const tagsBar = document.createElement("div");
+    tagsBar.className = "tree-tags hidden";
+    const linksPanel = document.createElement("div");
+    linksPanel.className = "tree-links";
+
+    const groups = category.children ?? [];
+    if (!groups.length) {
+      return;
+    }
+
+    let activeGroupId = groups[0].id;
+    let activeTagId = null;
+
+    const renderLinks = (group) => {
+      linksPanel.replaceChildren();
+      const linkNodes = group.children ?? [];
+      const tags = getTagsForGroup(group);
+      let nodesToRender = linkNodes;
+
+      if (activeTagId) {
+        const tagEntry = tags.find((tag) => tag.id === activeTagId);
+        if (tagEntry) {
+          nodesToRender = tagEntry.linkNodes;
+        } else {
+          activeTagId = null;
+        }
+      }
+
+      if (!nodesToRender.length) {
+        const empty = document.createElement("p");
+        empty.className = "tree-links__empty";
+        empty.textContent = "이 그룹에 링크가 없습니다.";
+        linksPanel.append(empty);
+        return;
+      }
+
+      const list = document.createElement("div");
+      list.className = "tree-links__list";
+
+      nodesToRender.forEach((linkNode) => {
+        const data = linkNode.link;
+        if (!data) return;
+        const item = document.createElement("article");
+        item.className = "tree-link";
+
+        const heading = document.createElement("div");
+        heading.className = "tree-link__heading";
+        const anchor = document.createElement("a");
+        anchor.href = data.url;
+        anchor.target = "_blank";
+        anchor.rel = "noopener noreferrer";
+        anchor.textContent = data.title || data.meta?.title || getDomain(data.url) || data.url;
+        heading.append(anchor);
+
+        const meta = document.createElement("div");
+        meta.className = "tree-link__meta";
+        const domain = getDomain(data.url);
+        if (domain) {
+          const domainSpan = document.createElement("span");
+          domainSpan.textContent = domain;
+          meta.append(domainSpan);
+        }
+        const savedAt = formatDateTime(data.createdAt);
+        if (savedAt) {
+          const timeSpan = document.createElement("span");
+          timeSpan.textContent = savedAt;
+          meta.append(timeSpan);
+        }
+        if (data.tags?.length) {
+          const tagSpan = document.createElement("span");
+          tagSpan.textContent = `태그: ${data.tags.slice(0, 3).join(', ')}`;
+          meta.append(tagSpan);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "tree-link__actions";
+        const openButton = createButton("열기", {
+          icon: "🔗",
+          variant: "ghost",
+          onClick: () => {
+            chrome.tabs.create({ url: data.url, active: false });
+            setStatus("새 탭으로 열었습니다.", "success");
+          }
+        });
+        const copyButton = createButton("복사", {
+          icon: "📋",
+          variant: "ghost",
+          onClick: () => handleCopyLink(data.url)
+        });
+        const privateButton = createButton(data.private ? "공유" : "비공개", {
+          icon: data.private ? "🔓" : "🔒",
+          variant: data.private ? "secondary" : "ghost",
+          onClick: async () => {
+            if (!data.private) {
+              const unlocked = await ensurePrivateUnlocked();
+              if (!unlocked) {
+                setStatus("프라이빗 PIN 인증이 필요합니다.", "error");
+                return;
+              }
+            }
+            try {
+              const updatedLinks = await sendMessage(MESSAGE_TYPES.TOGGLE_PRIVATE, { id: data.id });
+              updateLinks(updatedLinks);
+              setStatus(data.private ? "프라이빗을 해제했습니다." : "비공개로 전환했습니다.", "success");
+            } catch (error) {
+              setStatus("프라이빗 상태를 변경하지 못했습니다.", "error");
+            }
+          }
+        });
+        const deleteButton = createButton("삭제", {
+          icon: "🗑",
+          variant: "danger",
+          onClick: async () => {
+            if (!confirm("이 링크를 삭제할까요?")) {
+              return;
+            }
+            try {
+              const updatedLinks = await sendMessage(MESSAGE_TYPES.DELETE_LINK, { id: data.id });
+              updateLinks(updatedLinks);
+              setStatus("삭제했습니다.", "success");
+            } catch (error) {
+              setStatus("삭제하지 못했습니다.", "error");
+            }
+          }
+        });
+
+        actions.append(openButton, copyButton, privateButton, deleteButton);
+
+        item.append(heading, meta, actions);
+        list.append(item);
+      });
+
+      linksPanel.append(list);
+    };
+
+    const renderTags = (group) => {
+      const tags = getTagsForGroup(group);
+      tagsBar.replaceChildren();
+      const onlyUntagged = tags.length === 1 && tags[0].id === UNTAGGED_TAG_ID;
+      if (!tags.length || onlyUntagged) {
+        tagsBar.classList.add("hidden");
+        activeTagId = null;
+        return;
+      }
+      tagsBar.classList.remove("hidden");
+      tags.forEach((tag) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tree-tag-chip";
+        chip.textContent = `${tag.label} (${tag.count})`;
+        chip.classList.toggle("selected", tag.id === activeTagId);
+        chip.addEventListener("click", () => {
+          if (activeTagId === tag.id) {
+            activeTagId = null;
+          } else {
+            activeTagId = tag.id;
+          }
+          renderTags(group);
+          renderLinks(group);
+        });
+        tagsBar.append(chip);
+      });
+    };
+
+    const renderChips = () => {
+      groupBar.replaceChildren();
+      groups.forEach((group) => {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "tree-group-chip";
+        chip.dataset.groupId = group.id;
+        chip.textContent = `${group.label} (${group.count})`;
+        chip.classList.toggle("selected", group.id === activeGroupId);
+        chip.addEventListener("click", () => {
+          if (activeGroupId === group.id) {
+            return;
+          }
+          activeGroupId = group.id;
+          activeTagId = null;
+          renderChips();
+          const selectedGroup = groups.find((item) => item.id === activeGroupId) ?? groups[0];
+          renderTags(selectedGroup);
+          renderLinks(selectedGroup);
+        });
+        groupBar.append(chip);
+      });
+    };
+
+    renderChips();
+    const initialGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0];
+    renderTags(initialGroup);
+    renderLinks(initialGroup);
+
+    section.append(header, groupBar, tagsBar, linksPanel);
+    layout.append(section);
   });
-  elements.list.replaceChildren(fragment);
+
+  elements.list.replaceChildren(layout);
 }
+
+
 
 
 const CATEGORY_PALETTE = [
