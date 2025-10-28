@@ -30,6 +30,9 @@ const state = {
     minClusterCount: 1,
     forceScale: 1
   },
+  graphFilters: {
+    categories: []
+  },
   isPrivateView: false,
   privateUnlocked: false,
   isLoading: true
@@ -57,8 +60,6 @@ const elements = {
   importFileInput: document.getElementById("import-file-input"),
   changePinBtn: document.getElementById("change-pin-btn")
 };
-
-let activeGraphSimulation = null;
 
 function setStatus(message, tone = "info") {
   if (!elements.status) return;
@@ -317,12 +318,7 @@ function applyFilters() {
   });
 }
 
-function disposeGraph() {
-  if (activeGraphSimulation && typeof activeGraphSimulation.stop === "function") {
-    activeGraphSimulation.stop();
-  }
-  activeGraphSimulation = null;
-}
+function disposeGraph() {}
 
 function configureContainerForView() {
   elements.list.classList.remove("link-list", "tree-container", "graph-container");
@@ -988,189 +984,164 @@ function renderTree(filtered) {
   elements.list.replaceChildren(fragment);
 }
 
-function buildGraphData(links) {
-  const nodes = [];
-  const edges = [];
-  const nodeById = new Map();
-  const stats = {
-    categories: 0,
-    clusters: 0,
-    links: links.length,
-    filteredLinks: 0
-  };
 
-  function ensureNode(id, data) {
-    if (nodeById.has(id)) {
-      return nodeById.get(id);
-    }
-    const node = {
-      id,
-      type: data.type,
-      label: data.label,
-      meta: data.meta ?? {},
-      link: data.link ?? null,
-      radius: data.radius ?? 12,
-      color: data.color,
-      group: data.group ?? data.type,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0
-    };
-    nodes.push(node);
-    nodeById.set(id, node);
-    return node;
-  }
+const CATEGORY_PALETTE = [
+  "#2563eb",
+  "#f97316",
+  "#0ea5e9",
+  "#a855f7",
+  "#22c55e",
+  "#f43f5e",
+  "#14b8a6",
+  "#ef4444",
+  "#8b5cf6",
+  "#f59e0b"
+];
 
-  const categoryCounts = new Map();
-  const clusterCounts = new Map();
+function getCategoryColor(index) {
+  return CATEGORY_PALETTE[index % CATEGORY_PALETTE.length];
+}
+
+function buildSectorGraph(links) {
+  const filterSet = new Set(state.graphFilters.categories.filter(Boolean));
   const minClusterCount = state.graphSettings?.minClusterCount ?? 1;
+  const categoriesMap = new Map();
 
   links.forEach((link) => {
     const categoryLabel = link.category ?? "기타";
-    const categoryId = `category:${categoryLabel}`;
-    const categoryNode = ensureNode(categoryId, {
-      type: "category",
-      label: `${CATEGORY_ICONS[categoryLabel] ?? CATEGORY_ICONS.기타} ${categoryLabel}`,
-      radius: 26,
-      color: "#2563eb",
-      meta: { category: categoryLabel }
-    });
-    categoryCounts.set(categoryId, (categoryCounts.get(categoryId) ?? 0) + 1);
+    if (filterSet.size && !filterSet.has(categoryLabel)) {
+      return;
+    }
+    let category = categoriesMap.get(categoryLabel);
+    if (!category) {
+      category = {
+        id: categoryLabel,
+        label: `${CATEGORY_ICONS[categoryLabel] ?? CATEGORY_ICONS.기타} ${categoryLabel}`,
+        rawLabel: categoryLabel,
+        count: 0,
+        clustersMap: new Map()
+      };
+      categoriesMap.set(categoryLabel, category);
+    }
+    category.count += 1;
 
-    const clusterId = link.cluster?.id ?? `cluster:${categoryLabel}:misc`;
-    const clusterLabel = link.cluster?.label ?? "토픽 미지정";
-    const clusterNode = ensureNode(clusterId, {
-      type: "cluster",
-      label: clusterLabel,
-      radius: 18,
-      color: "#f59e0b",
-      meta: {
-        category: categoryLabel,
-        keywords: link.cluster?.keywords ?? []
-      }
-    });
-    clusterCounts.set(clusterId, (clusterCounts.get(clusterId) ?? 0) + 1);
-
-    const linkId = `link:${link.id}`;
-    const linkNode = ensureNode(linkId, {
-      type: "link",
-      label: link.title || link.meta?.title || getDomain(link.url) || link.url,
-      radius: 10,
-      color: "#10b981",
-      link,
-      meta: {
-        url: link.url,
-        category: categoryLabel,
-        cluster: clusterLabel
-      }
-    });
-
-    edges.push({
-      source: categoryNode,
-      target: clusterNode,
-      strength: 0.08,
-      length: 140,
-      type: "category-cluster"
-    });
-    edges.push({
-      source: clusterNode,
-      target: linkNode,
-      strength: 0.06,
-      length: 90,
-      type: "cluster-link"
-    });
-  });
-
-  categoryCounts.forEach((count, id) => {
-    const node = nodeById.get(id);
-    if (node) {
-      node.radius = Math.min(32, 22 + Math.log2(count + 1) * 6);
-      node.meta.count = count;
+    const clusterMeta = link.cluster ?? {};
+    const clusterId = clusterMeta.id ?? `cluster:${categoryLabel}:${link.tags?.[0] ?? "misc"}`;
+    let cluster = category.clustersMap.get(clusterId);
+    if (!cluster) {
+      const keywords = new Set(clusterMeta.keywords ?? []);
+      cluster = {
+        id: clusterId,
+        label: clusterMeta.label ?? [...keywords][0] ?? "토픽 없음",
+        count: 0,
+        keywords,
+        links: []
+      };
+      category.clustersMap.set(clusterId, cluster);
+    }
+    cluster.count += 1;
+    cluster.links.push(link);
+    if (clusterMeta.keywords) {
+      clusterMeta.keywords.forEach((kw) => cluster.keywords.add(kw));
+    }
+    if (Array.isArray(link.tags)) {
+      link.tags.forEach((tag) => cluster.keywords.add(tag));
     }
   });
 
-  const clustersToRemove = new Set();
+  const categories = Array.from(categoriesMap.values())
+    .map((category) => {
+      const clusters = Array.from(category.clustersMap.values())
+        .filter((cluster) => cluster.count >= minClusterCount)
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+        .map((cluster) => ({
+          ...cluster,
+          keywords: Array.from(cluster.keywords).slice(0, 5),
+          links: cluster.links.sort((a, b) => new Date(b.createdAt ?? 0) - new Date(a.createdAt ?? 0))
+        }));
+      return {
+        ...category,
+        clusters
+      };
+    })
+    .filter((category) => category.clusters.length > 0);
 
-  clusterCounts.forEach((count, id) => {
-    const node = nodeById.get(id);
-    if (node) {
-      node.radius = Math.min(24, 16 + Math.log2(count + 1) * 4);
-      node.meta.count = count;
-      if (count < minClusterCount) {
-        clustersToRemove.add(id);
-      }
-    }
-  });
+  const totalLinks = categories.reduce((sum, category) => sum + category.count, 0);
+  const stats = {
+    categories: categories.length,
+    clusters: categories.reduce((sum, category) => sum + category.clusters.length, 0),
+    links: totalLinks,
+    filteredLinks: categories.reduce((sum, category) => sum + category.clusters.reduce((acc, cluster) => acc + cluster.links.length, 0), 0)
+  };
 
-  nodes.forEach((node) => {
-    if (node.type === "link") {
-      const clusterId = node.link?.cluster?.id ?? `cluster:${node.meta?.category ?? "기타"}:misc`;
-      if (clustersToRemove.has(clusterId)) {
-        node.meta.filteredOut = true;
-      }
-    }
-  });
-
-  const filteredNodes = nodes.filter((node) => {
-    if (node.type === "cluster") {
-      return !clustersToRemove.has(node.id);
-    }
-    if (node.type === "link") {
-      return node.meta.filteredOut !== true;
-    }
-    return true;
-  });
-
-  const filteredEdges = edges.filter((edge) => {
-    if (edge.type === "category-cluster") {
-      return !clustersToRemove.has(edge.target.id);
-    }
-    if (edge.type === "cluster-link") {
-      return !clustersToRemove.has(edge.source.id) && edge.target.meta.filteredOut !== true;
-    }
-    return true;
-  });
-
-  const usedNodeIds = new Set();
-  filteredEdges.forEach((edge) => {
-    usedNodeIds.add(edge.source.id ?? edge.source);
-    usedNodeIds.add(edge.target.id ?? edge.target);
-  });
-
-  const finalNodes = filteredNodes.filter((node) => {
-    if (node.type === "category") {
-      return usedNodeIds.has(node.id);
-    }
-    return true;
-  });
-
-  finalNodes.forEach((node) => {
-    if (node.type === "category") stats.categories += 1;
-    if (node.type === "cluster") stats.clusters += 1;
-    if (node.type === "link") stats.filteredLinks += 1;
-  });
-
-  return { nodes: finalNodes, edges: filteredEdges, stats };
+  return { categories, stats, totalLinks };
 }
 
 function renderGraph(filtered) {
   disposeGraph();
   configureContainerForView();
 
-  const width = 340;
-  const height = 340;
-  const { nodes, edges, stats } = buildGraphData(filtered);
+  const { categories, stats, totalLinks } = buildSectorGraph(filtered);
 
-  if (!nodes.length) {
+  if (!categories.length) {
     renderEmpty("그래프에 표시할 링크가 없습니다.");
     return;
   }
 
-  const svgNS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(svgNS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.setAttribute("class", "graph-canvas");
+  const width = 520;
+  const height = 400;
+  const centerX = width / 2;
+  const centerY = height / 2 + 10;
+  const spread = state.graphSettings.forceScale || 1;
+  const categoryRadius = 140 * spread;
+  const clusterBaseRadius = categoryRadius + 60 * spread;
+  const clusterGap = 42 * spread;
+  const linkRadiusOffset = 38 * spread;
+
+  const totalCount = totalLinks || categories.length;
+  let angleCursor = -Math.PI / 2;
+
+  categories.forEach((category, index) => {
+    const angleSpan = totalCount > 0 ? (Math.PI * 2 * category.count) / totalCount : (Math.PI * 2) / categories.length;
+    const midAngle = angleCursor + angleSpan / 2;
+    category.color = getCategoryColor(index);
+    category.angleStart = angleCursor;
+    category.angleEnd = angleCursor + angleSpan;
+    category.position = {
+      x: centerX + Math.cos(midAngle) * categoryRadius,
+      y: centerY + Math.sin(midAngle) * categoryRadius
+    };
+
+    const clusters = category.clusters;
+    const clusterCount = clusters.length || 1;
+    clusters.forEach((cluster, clusterIndex) => {
+      const clusterAngle = angleCursor + angleSpan * ((clusterIndex + 1) / (clusterCount + 1));
+      const clusterRadius = clusterBaseRadius + clusterIndex * clusterGap;
+      cluster.position = {
+        x: centerX + Math.cos(clusterAngle) * clusterRadius,
+        y: centerY + Math.sin(clusterAngle) * clusterRadius
+      };
+      cluster.color = category.color;
+
+      const linkCount = cluster.links.length || 1;
+      const linkAngularRange = angleSpan / (clusterCount + 2);
+      const linkStartAngle = clusterAngle - linkAngularRange / 2;
+      cluster.links.forEach((link, linkIndex) => {
+        const linkAngle = linkStartAngle + linkAngularRange * ((linkIndex + 1) / (linkCount + 1));
+        const linkRadius = clusterRadius + linkRadiusOffset;
+        link.graphPosition = {
+          x: centerX + Math.cos(linkAngle) * linkRadius,
+          y: centerY + Math.sin(linkAngle) * linkRadius
+        };
+        link.graphColor = "#22c55e";
+      });
+    });
+
+    angleCursor += angleSpan;
+  });
+
+  const layout = document.createElement("div");
+  layout.className = "graph-layout";
 
   const summary = document.createElement("div");
   summary.className = "graph-summary";
@@ -1180,286 +1151,223 @@ function renderGraph(filtered) {
     <div><strong>링크</strong><span>${stats.filteredLinks}</span></div>
   `;
 
-  const defs = document.createElementNS(svgNS, "defs");
-  const glow = document.createElementNS(svgNS, "filter");
-  glow.setAttribute("id", "nodeGlow");
-  glow.innerHTML = `
-    <feGaussianBlur stdDeviation="4" result="coloredBlur"></feGaussianBlur>
-    <feMerge>
-      <feMergeNode in="coloredBlur"></feMergeNode>
-      <feMergeNode in="SourceGraphic"></feMergeNode>
-    </feMerge>
-  `;
-  defs.append(glow);
-  svg.append(defs);
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("class", "graph-canvas");
 
-  const linksGroup = document.createElementNS(svgNS, "g");
-  linksGroup.setAttribute("stroke", "rgba(15,23,42,0.2)");
-  linksGroup.setAttribute("stroke-width", "1.2");
-  svg.append(linksGroup);
+  const connectionGroup = document.createElementNS(svgNS, "g");
+  connectionGroup.setAttribute("class", "graph-connections");
+  svg.append(connectionGroup);
 
-  const nodesGroup = document.createElementNS(svgNS, "g");
-  svg.append(nodesGroup);
+  const nodeGroup = document.createElementNS(svgNS, "g");
+  nodeGroup.setAttribute("class", "graph-nodes");
+  svg.append(nodeGroup);
 
   const infoPanel = document.createElement("div");
   infoPanel.className = "graph-info";
   infoPanel.innerHTML = "<p>노드를 클릭하면 자세한 정보를 볼 수 있어요.</p>";
 
-  const lineElements = edges.map(() => {
-    const line = document.createElementNS(svgNS, "line");
-    line.setAttribute("stroke-linecap", "round");
-    linksGroup.append(line);
-    return line;
+  const legend = document.createElement("aside");
+  legend.className = "graph-legend";
+
+  const resetLegendButton = document.createElement("button");
+  resetLegendButton.type = "button";
+  resetLegendButton.className = "graph-legend__reset";
+  resetLegendButton.textContent = "전체 보기";
+  resetLegendButton.addEventListener("click", () => {
+    state.graphFilters.categories = [];
+    renderGraph(applyFilters());
+  });
+  legend.append(resetLegendButton);
+
+  const lineElements = [];
+
+  categories.forEach((category) => {
+    const categoryButton = document.createElement("button");
+    categoryButton.type = "button";
+    categoryButton.className = "graph-legend__item";
+    if (state.graphFilters.categories.includes(category.rawLabel)) {
+      categoryButton.classList.add("selected");
+    }
+    categoryButton.innerHTML = `
+      <span class="swatch" style="background:${category.color}"></span>
+      <strong>${category.label}</strong>
+      <span>${category.count}</span>
+    `;
+    categoryButton.addEventListener("click", () => {
+      if (state.graphFilters.categories.includes(category.rawLabel)) {
+        state.graphFilters.categories = [];
+      } else {
+        state.graphFilters.categories = [category.rawLabel];
+      }
+      renderGraph(applyFilters());
+    });
+    legend.append(categoryButton);
   });
 
-  const nodeElements = nodes.map((node) => {
+  const highlightLines = (predicate) => {
+    lineElements.forEach(({ element, category, cluster, link }) => {
+      if (predicate({ category, cluster, link })) {
+        element.classList.remove("muted");
+      } else {
+        element.classList.add("muted");
+      }
+    });
+  };
+
+  const resetHighlight = () => {
+    lineElements.forEach(({ element }) => element.classList.remove("muted"));
+  };
+
+  const showInfo = (payload) => {
+    infoPanel.replaceChildren();
+    if (payload.type === "link" && payload.link) {
+      infoPanel.append(createCard(payload.link, { compact: true }));
+      return;
+    }
+    const heading = document.createElement("h3");
+    heading.textContent = payload.title;
+    infoPanel.append(heading);
+    if (payload.subtitle) {
+      const subtitle = document.createElement("p");
+      subtitle.className = "graph-info__meta";
+      subtitle.textContent = payload.subtitle;
+      infoPanel.append(subtitle);
+    }
+    if (payload.list && payload.list.length) {
+      const list = document.createElement("ul");
+      list.className = "graph-info__list";
+      payload.list.forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.append(li);
+      });
+      infoPanel.append(list);
+    }
+  };
+
+  categories.forEach((category) => {
+    category.clusters.forEach((cluster) => {
+      const categoryLine = document.createElementNS(svgNS, "line");
+      categoryLine.setAttribute("x1", String(category.position.x));
+      categoryLine.setAttribute("y1", String(category.position.y));
+      categoryLine.setAttribute("x2", String(cluster.position.x));
+      categoryLine.setAttribute("y2", String(cluster.position.y));
+      categoryLine.setAttribute("class", "graph-link graph-link--category");
+      categoryLine.setAttribute("stroke", `${category.color}55`);
+      connectionGroup.append(categoryLine);
+      lineElements.push({ element: categoryLine, category, cluster });
+
+      cluster.links.forEach((link) => {
+        const linkLine = document.createElementNS(svgNS, "line");
+        linkLine.setAttribute("x1", String(cluster.position.x));
+        linkLine.setAttribute("y1", String(cluster.position.y));
+        linkLine.setAttribute("x2", String(link.graphPosition.x));
+        linkLine.setAttribute("y2", String(link.graphPosition.y));
+        linkLine.setAttribute("class", "graph-link graph-link--link");
+        linkLine.setAttribute("stroke", `${category.color}40`);
+        connectionGroup.append(linkLine);
+        lineElements.push({ element: linkLine, category, cluster, link });
+      });
+    });
+  });
+
+  const addNode = (config) => {
     const group = document.createElementNS(svgNS, "g");
-    group.setAttribute("class", `graph-node graph-node--${node.type}`);
+    group.setAttribute("class", `graph-node graph-node--${config.type}`);
+    group.setAttribute("transform", `translate(${config.position.x},${config.position.y})`);
 
     const circle = document.createElementNS(svgNS, "circle");
-    circle.setAttribute("r", String(node.radius));
-    circle.setAttribute("fill", node.color);
-    circle.setAttribute("fill-opacity", node.type === "link" ? "0.85" : "0.95");
-    circle.setAttribute("filter", "url(#nodeGlow)");
+    circle.setAttribute("r", String(config.radius));
+    circle.setAttribute("fill", config.fill);
     group.append(circle);
 
-    if (node.type !== "link") {
+    if (config.label) {
       const label = document.createElementNS(svgNS, "text");
       label.setAttribute("class", "graph-node__label");
-      label.textContent = node.label;
+      label.textContent = config.label;
+      label.setAttribute("y", String(config.labelOffset ?? config.radius + 12));
       group.append(label);
-    } else {
-      circle.setAttribute("stroke", "rgba(255,255,255,0.8)");
-      circle.setAttribute("stroke-width", "1.2");
     }
 
-    nodesGroup.append(group);
-    return { group, circle };
-  });
+    group.addEventListener("mouseenter", () => {
+      highlightLines(({ category }) => category.id === config.categoryId);
+    });
 
-  function updatePositions() {
-    nodes.forEach((node, index) => {
-      const { group, circle } = nodeElements[index];
-      const x = node.x;
-      const y = node.y;
-      group.setAttribute("transform", `translate(${x},${y})`);
-      circle.setAttribute("cx", "0");
-      circle.setAttribute("cy", "0");
+    group.addEventListener("mouseleave", () => {
+      resetHighlight();
+    });
 
-      if (group.childNodes.length > 1) {
-        const label = group.childNodes[1];
-        const offsetY = node.type === "category" ? -node.radius - 6 : node.radius + 12;
-        label.setAttribute("x", "0");
-        label.setAttribute("y", String(offsetY));
+    group.addEventListener("click", () => {
+      if (config.onClick) {
+        config.onClick();
       }
     });
 
-    edges.forEach((edge, index) => {
-      const line = lineElements[index];
-      line.setAttribute("x1", String(edge.source.x));
-      line.setAttribute("y1", String(edge.source.y));
-      line.setAttribute("x2", String(edge.target.x));
-      line.setAttribute("y2", String(edge.target.y));
-      line.setAttribute("stroke", edge.type === "category-cluster" ? "rgba(79,70,229,0.35)" : "rgba(16,185,129,0.4)");
-    });
-  }
-
-  updatePositions();
-
-  const simulation = startForceSimulation(nodes, edges, {
-    width,
-    height,
-    onTick: updatePositions,
-    forceScale: state.graphSettings.forceScale
-  });
-  activeGraphSimulation = simulation;
-
-  function showInfo(node) {
-    infoPanel.classList.remove("hidden");
-    infoPanel.replaceChildren();
-    if (node.type === "link" && node.link) {
-      const card = createCard(node.link, { compact: true });
-      infoPanel.append(card);
-    } else {
-      const heading = document.createElement("h3");
-      heading.textContent = node.label;
-      const meta = document.createElement("p");
-      meta.className = "graph-info__meta";
-      if (node.type === "cluster") {
-        const keywords = node.meta?.keywords ?? [];
-        const count = node.meta?.count ?? 0;
-        const summary = keywords.length ? `키워드: ${keywords.join(", ")}` : "연관 키워드 없음";
-        meta.textContent = `${summary} · 링크 ${count}개`;
-      } else if (node.type === "category") {
-        const count = node.meta?.count ?? 0;
-        meta.textContent = `${node.meta?.category ?? "카테고리"} 카테고리 · 링크 ${count}개`;
-      } else {
-        meta.textContent = "노드를 클릭하세요.";
-      }
-      infoPanel.append(heading, meta);
-    }
-  }
-
-  function svgPointFromEvent(event) {
-    const point = svg.createSVGPoint();
-    point.x = event.clientX;
-    point.y = event.clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) {
-      return { x: 0, y: 0 };
-    }
-    const transformed = point.matrixTransform(ctm.inverse());
-    return { x: transformed.x, y: transformed.y };
-  }
-
-  nodeElements.forEach(({ group }, index) => {
-    const node = nodes[index];
-    group.style.cursor = "pointer";
-    group.addEventListener("pointerenter", () => {
-      group.classList.add("graph-node--hover");
-      setStatus(`${node.label}`, "info");
-    });
-    group.addEventListener("pointerleave", () => {
-      group.classList.remove("graph-node--hover");
-      setStatus("", "info");
-    });
-    group.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (node.type === "link" && node.link) {
-        showInfo(node);
-      } else if (node.type === "cluster") {
-        showInfo(node);
-      } else if (node.type === "category") {
-        showInfo(node);
-      }
-    });
-
-    group.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      const pointerId = event.pointerId;
-      const move = (moveEvent) => {
-        if (moveEvent.pointerId !== pointerId) {
-          return;
-        }
-        const coords = svgPointFromEvent(moveEvent);
-        node.x = coords.x;
-        node.y = coords.y;
-        node.vx = 0;
-        node.vy = 0;
-        updatePositions();
-      };
-      const up = (upEvent) => {
-        if (upEvent.pointerId !== pointerId) {
-          return;
-        }
-        svg.removeEventListener("pointermove", move);
-        svg.removeEventListener("pointerup", up);
-      };
-      svg.addEventListener("pointermove", move);
-      svg.addEventListener("pointerup", up, { once: true });
-    });
-  });
-
-  elements.list.replaceChildren(summary, svg, infoPanel);
-}
-
-function startForceSimulation(nodes, edges, options) {
-  const width = options.width ?? 340;
-  const height = options.height ?? 320;
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const maxIterations = 500;
-  const forceScale = options.forceScale ?? 1;
-  const repulsionStrength = 1800 * forceScale;
-  const springStrength = 0.04 * forceScale;
-  const damping = 0.9;
-
-  nodes.forEach((node) => {
-    node.x = centerX + (Math.random() - 0.5) * width * 0.4;
-    node.y = centerY + (Math.random() - 0.5) * height * 0.4;
-    node.vx = 0;
-    node.vy = 0;
-  });
-
-  let frame;
-  let iteration = 0;
-
-  const tick = () => {
-    iteration += 1;
-
-    for (let i = 0; i < nodes.length; i += 1) {
-      for (let j = i + 1; j < nodes.length; j += 1) {
-        const nodeA = nodes[i];
-        const nodeB = nodes[j];
-        let dx = nodeB.x - nodeA.x;
-        let dy = nodeB.y - nodeA.y;
-        let distSq = dx * dx + dy * dy;
-        if (distSq < 0.01) {
-          distSq = 0.01;
-          dx = (Math.random() - 0.5) * 0.1;
-          dy = (Math.random() - 0.5) * 0.1;
-        }
-        const dist = Math.sqrt(distSq);
-        const force = repulsionStrength / distSq;
-        const fx = (force * dx) / dist;
-        const fy = (force * dy) / dist;
-        nodeA.vx -= fx;
-        nodeA.vy -= fy;
-        nodeB.vx += fx;
-        nodeB.vy += fy;
-      }
-    }
-
-    edges.forEach((edge) => {
-      const source = edge.source;
-      const target = edge.target;
-      let dx = target.x - source.x;
-      let dy = target.y - source.y;
-      let dist = Math.sqrt(dx * dx + dy * dy) || 0.01;
-      const desired = edge.length ?? 120;
-      const force = (dist - desired) * (edge.strength ?? springStrength);
-      const fx = (force * dx) / dist;
-      const fy = (force * dy) / dist;
-      source.vx += fx;
-      source.vy += fy;
-      target.vx -= fx;
-      target.vy -= fy;
-    });
-
-    nodes.forEach((node) => {
-      const centeringStrength = 0.05;
-      node.vx += (centerX - node.x) * centeringStrength;
-      node.vy += (centerY - node.y) * centeringStrength;
-
-      node.vx *= damping;
-      node.vy *= damping;
-
-      node.x += node.vx * 0.02;
-      node.y += node.vy * 0.02;
-
-      node.x = Math.max(node.radius, Math.min(width - node.radius, node.x));
-      node.y = Math.max(node.radius, Math.min(height - node.radius, node.y));
-    });
-
-    if (typeof options.onTick === "function") {
-      options.onTick();
-    }
-
-    if (iteration < maxIterations) {
-      frame = requestAnimationFrame(tick);
-    }
+    nodeGroup.append(group);
   };
 
-  frame = requestAnimationFrame(tick);
-
-  return {
-    stop() {
-      if (frame) {
-        cancelAnimationFrame(frame);
+  categories.forEach((category) => {
+    addNode({
+      type: "category",
+      position: category.position,
+      radius: 18,
+      fill: category.color,
+      categoryId: category.id,
+      label: category.label,
+      labelOffset: -22,
+      onClick: () => {
+        showInfo({
+          type: "category",
+          title: category.label,
+          subtitle: `링크 ${category.count}개 · 토픽 ${category.clusters.length}개`,
+          list: category.clusters.slice(0, 6).map((cluster) => `${cluster.label} · ${cluster.count}개`)
+        });
       }
-    }
-  };
+    });
+
+    category.clusters.forEach((cluster) => {
+      addNode({
+        type: "cluster",
+        position: cluster.position,
+        radius: 11,
+        fill: category.color,
+        categoryId: category.id,
+        label: cluster.label,
+        onClick: () => {
+          showInfo({
+            type: "cluster",
+            title: `${cluster.label} · ${cluster.count}개`,
+            subtitle: cluster.keywords.length ? `키워드: ${cluster.keywords.join(", ")}` : "키워드 없음",
+            list: cluster.links.slice(0, 6).map((link) => link.title || link.url)
+          });
+        }
+      });
+
+      cluster.links.forEach((link) => {
+        addNode({
+          type: "link",
+          position: link.graphPosition,
+          radius: 6,
+          fill: link.graphColor,
+          categoryId: category.id,
+          onClick: () => {
+            showInfo({ type: "link", link });
+          }
+        });
+      });
+    });
+  });
+
+  const panel = document.createElement("div");
+  panel.className = "graph-panel";
+  panel.append(svg, infoPanel);
+
+  layout.append(summary, panel, legend);
+  elements.list.replaceChildren(layout);
 }
+
 
 function render() {
   updateViewControls();

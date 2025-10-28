@@ -591,6 +591,97 @@ button.primary:hover {
   border-radius: var(--radius-sm);
 }
 
+.graph-layout {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.graph-panel {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.graph-connections line {
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  transition: stroke 0.2s ease, opacity 0.2s ease;
+}
+
+.graph-link.muted {
+  opacity: 0.2;
+}
+
+.graph-nodes .graph-node circle {
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.graph-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.graph-legend__reset,
+.graph-legend__item {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 255, 0.8);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border 0.15s ease;
+}
+
+.graph-legend__item:hover,
+.graph-legend__reset:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(15, 23, 42, 0.12);
+}
+
+.graph-legend__reset {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  font-weight: 600;
+}
+
+.graph-legend__item.selected {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.18);
+  color: var(--primary-dark);
+}
+
+.graph-legend__item .swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.1);
+}
+
+.graph-node__label {
+  font-size: 0.68rem;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  fill: rgba(15, 23, 42, 0.84);
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 0.85px;
+}
+
+.graph-info__list {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
 .graph-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -625,18 +716,6 @@ button.primary:hover {
   border: 1px solid rgba(148, 163, 184, 0.38);
   box-shadow: inset 0 12px 30px rgba(15, 23, 42, 0.08);
   touch-action: none;
-}
-
-.graph-node__label {
-  font-size: 0.68rem;
-  text-anchor: middle;
-  dominant-baseline: middle;
-  fill: rgba(15, 23, 42, 0.84);
-  font-weight: 600;
-  letter-spacing: 0.015em;
-  paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.82);
-  stroke-width: 0.85px;
 }
 
 .graph-node--category circle {
