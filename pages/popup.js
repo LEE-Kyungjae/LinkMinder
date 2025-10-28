@@ -1116,7 +1116,7 @@ function renderGraph(filtered) {
     const clusterCount = clusters.length || 1;
     clusters.forEach((cluster, clusterIndex) => {
       const clusterAngle = angleCursor + angleSpan * ((clusterIndex + 1) / (clusterCount + 1));
-      const clusterRadius = clusterBaseRadius + clusterIndex * clusterGap;
+    const clusterRadius = clusterBaseRadius + clusterIndex * clusterGap - 18;
       cluster.position = {
         x: centerX + Math.cos(clusterAngle) * clusterRadius,
         y: centerY + Math.sin(clusterAngle) * clusterRadius
@@ -1128,7 +1128,7 @@ function renderGraph(filtered) {
       const linkStartAngle = clusterAngle - linkAngularRange / 2;
       cluster.links.forEach((link, linkIndex) => {
         const linkAngle = linkStartAngle + linkAngularRange * ((linkIndex + 1) / (linkCount + 1));
-        const linkRadius = clusterRadius + linkRadiusOffset;
+        const linkRadius = clusterRadius + linkRadiusOffset - 20;
         link.graphPosition = {
           x: centerX + Math.cos(linkAngle) * linkRadius,
           y: centerY + Math.sin(linkAngle) * linkRadius
