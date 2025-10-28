@@ -26,9 +26,9 @@
 html,
 body {
   margin: 0;
-  width: 392px;
-  min-height: 520px;
-  max-height: 620px;
+  width: 440px;
+  min-height: 560px;
+  max-height: 720px;
 }
 
 body {
@@ -36,9 +36,9 @@ body {
 }
 
 .popup {
-  width: 392px;
-  min-height: 520px;
-  max-height: 620px;
+  width: 440px;
+  min-height: 560px;
+  max-height: 720px;
   height: auto;
   padding: 0.85rem;
   box-sizing: border-box;
@@ -59,8 +59,8 @@ body {
   display: grid;
   gap: 0.7rem;
   position: relative;
-  min-height: 520px;
-  max-height: 620px;
+  min-height: 560px;
+  max-height: 700px;
   overflow-y: auto;
 }
 
