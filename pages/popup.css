@@ -428,7 +428,7 @@ button.primary:hover {
 }
 
 .note {
-  width: 100%;
+  width: calc(100% - 4px);
   border-radius: var(--radius-sm);
   border: 1px solid rgba(148, 163, 184, 0.4);
   padding: 0.4rem 0.5rem;
@@ -438,6 +438,7 @@ button.primary:hover {
   font-family: inherit;
   background-color: var(--surface-elevated);
   color: var(--text);
+  box-sizing: border-box;
 }
 
 .link-card__description {
