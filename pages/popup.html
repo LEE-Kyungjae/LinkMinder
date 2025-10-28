@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <title>LinkMinder</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div id="app" class="popup">
+      <div class="popup__surface">
+        <header class="popup__header">
+          <div class="popup__branding">
+            <h1>LinkMinder</h1>
+            <p class="subtitle">링크를 자동 분류하고 빠르게 찾아보세요.</p>
+          </div>
+          <div class="popup__actions">
+            <div class="view-toggle" role="tablist" aria-label="보기 전환">
+              <button id="list-view-btn" class="toggle-button selected" data-view="list" aria-selected="true">
+                📋 리스트
+              </button>
+              <button id="tree-view-btn" class="toggle-button" data-view="tree" aria-selected="false">
+                🌳 트리
+              </button>
+              <button id="graph-view-btn" class="toggle-button" data-view="graph" aria-selected="false">
+                🌀 그래프
+              </button>
+            </div>
+            <button id="private-hotspot" type="button" aria-label="LinkMinder" title="LinkMinder">
+              LM
+            </button>
+            <button id="save-current" class="primary">현재 탭 저장</button>
+          </div>
+        </header>
+      <section class="controls">
+        <input type="search" id="search-input" placeholder="검색 (제목, 링크, 태그)" />
+        <select id="tag-filter">
+          <option value="__all">모든 태그</option>
+        </select>
+        <select id="tree-grouping" class="hidden">
+          <option value="tag">그룹: 태그</option>
+          <option value="domain">그룹: 도메인</option>
+          <option value="time">그룹: 저장 시점</option>
+          <option value="cluster">그룹: 토픽</option>
+        </select>
+        <button id="change-pin-btn" class="button-ghost hidden" type="button">PIN 변경</button>
+        <div id="graph-controls" class="graph-controls hidden">
+          <label>
+            최소 토픽 링크 수
+            <input type="range" id="graph-min-cluster" min="1" max="5" step="1" value="1" />
+            <span id="graph-min-cluster-value">1</span>
+          </label>
+          <label>
+            그래프 힘 조절
+            <input type="range" id="graph-force-scale" min="0.5" max="2" step="0.1" value="1" />
+            <span id="graph-force-scale-value">1.0x</span>
+          </label>
+        </div>
+        <section class="backup-controls">
+          <button id="export-links-btn" type="button" class="button-secondary">📤 내보내기</button>
+          <div id="import-dropzone" tabindex="0">
+            <strong>📥 불러오기</strong>
+            <span>JSON 파일을 드래그하거나 클릭하세요</span>
+            <input type="file" id="import-file-input" accept="application/json" hidden />
+          </div>
+        </section>
+        <label class="checkbox">
+          <input type="checkbox" id="toggle-archived" />
+          보관함 포함
+        </label>
+        </section>
+        <section id="link-list" class="link-list">
+          <p class="empty-state">데이터를 불러오는 중...</p>
+        </section>
+        <footer class="footer">
+          <small>단축키: Alt + Shift + S 로 바로 저장</small>
+          <small id="status-text"></small>
+        </footer>
+      </div>
+    </div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

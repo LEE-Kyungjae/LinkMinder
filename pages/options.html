@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <title>LinkMinder 옵션</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="options">
+      <header class="options__header">
+        <div>
+          <h1>LinkMinder 설정</h1>
+          <p class="subtitle">자동 분류 규칙과 분류기 동작을 원하는 대로 조정하세요.</p>
+        </div>
+        <div class="options__header-actions">
+          <button id="refresh-rules" class="primary">새로고침</button>
+          <span id="options-status" class="options-status"></span>
+        </div>
+      </header>
+
+      <section class="options__section">
+        <h2>자동 분류 규칙</h2>
+        <p class="section-description">
+          도메인, 키워드, URL 패턴을 기반으로 저장 시 자동으로 카테고리와 태그를 부여할 수 있습니다.
+        </p>
+
+        <form id="rule-form" class="rule-form">
+          <div class="form-grid">
+            <label>
+              규칙 이름
+              <input type="text" id="rule-label" placeholder="예: Notion 문서" required />
+            </label>
+            <label>
+              카테고리
+              <select id="rule-category" required></select>
+            </label>
+            <label>
+              태그
+              <input type="text" id="rule-tags" placeholder="쉼표로 구분: notion, 문서" />
+            </label>
+            <label>
+              도메인 포함
+              <input type="text" id="rule-hosts" placeholder="예: notion.so, velog.io" />
+            </label>
+            <label>
+              키워드
+              <input type="text" id="rule-keywords" placeholder="제목/본문에 포함될 단어" />
+            </label>
+            <label>
+              URL 정규식
+              <input type="text" id="rule-regex" placeholder="고급 패턴 (선택)" />
+            </label>
+          </div>
+          <button type="submit" class="primary">규칙 추가</button>
+        </form>
+
+        <div id="rules-empty" class="empty-state">아직 커스텀 규칙이 없습니다.</div>
+        <table id="rules-table" class="rules-table hidden">
+          <thead>
+            <tr>
+              <th>이름</th>
+              <th>카테고리</th>
+              <th>도메인</th>
+              <th>키워드</th>
+              <th>태그</th>
+              <th>정규식</th>
+              <th>관리</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

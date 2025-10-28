@@ -1,28 +1,50 @@
 {
-    "manifest_version": 3,
-    "name": "탭저장소",
-    "description": "내가 사용하려고 만든 구글 확장프로그램. 마우스 오른쪽버튼을 이용하거나 단축키를 이용하여 열람중인 탭의 링크를 확장프로그램에 저장하고 원할때 확장프로그램 버튼을 클릭해서 확인할수있음",
-
-    "version": "1.0",
-    "action": {
-      "default_popup": "popup.html",
-      "default_icon": "hello_extensions.png"
-    },
-    "permissions": [
-        "nativeMessaging",
-        "storage"
+  "manifest_version": 3,
+  "name": "LinkMinder",
+  "description": "활성 탭을 빠르게 저장하고 자동 분류·태그까지 도와주는 개인용 링크 보관소",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "LinkMinder",
+    "default_popup": "pages/popup.html",
+    "default_icon": {
+      "128": "hello_extensions.png"
+    }
+  },
+  "options_page": "pages/options.html",
+  "icons": {
+    "128": "hello_extensions.png"
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "storage",
+    "tabs",
+    "downloads"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+  "commands": {
+    "save-current-tab": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "현재 탭을 LinkMinder에 저장"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
       ],
-    "content_security_policy":{
-      "extension_pages":"script-src 'self'"
-    },
-    "background": {
-      "service_worker": "background.js"
-    },
-    "content_scripts": [
-      {
-        "matches": ["<all_urls>"],
-        "js": ["libs/jquery-3.6.4.min.js", "content_script.js"]
-      }
-    ]
-
+      "js": [
+        "content/index.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }

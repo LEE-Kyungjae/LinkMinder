@@ -1,5 +1,19 @@
 {
-  "dependencies": {
-    "nodejs": "^0.0.0"
-  }
+  "name": "linkminder",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LinkMinder MV3 extension workspace",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "clean": "node scripts/clean.js",
+    "lint": "node scripts/lint.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "link-manager",
+    "bookmarking"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
 }
