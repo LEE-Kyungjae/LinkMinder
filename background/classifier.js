@@ -32,7 +32,7 @@ function scoreRule(rule, context) {
   const path = (() => {
     try {
       return new URL(url).pathname;
-    } catch (error) {
+    } catch {
       return "";
     }
   })();
