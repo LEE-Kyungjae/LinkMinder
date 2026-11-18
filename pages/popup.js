@@ -279,7 +279,7 @@ function formatDateTime(value) {
 function getDomain(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
-  } catch (error) {
+  } catch {
     return "";
   }
 }
@@ -484,7 +484,7 @@ function createCard(link, { compact = false } = {}) {
       });
       updateLinks(updatedLinks);
       setStatus("메모를 저장했습니다.", "success");
-    } catch (error) {
+    } catch {
       setStatus("메모 저장에 실패했습니다.", "error");
     }
   });
@@ -515,7 +515,7 @@ function createCard(link, { compact = false } = {}) {
         const updatedLinks = await sendMessage(MESSAGE_TYPES.TOGGLE_ARCHIVE, { id: link.id });
         updateLinks(updatedLinks);
         setStatus(link.archived ? "보관에서 복원했습니다." : "보관함으로 옮겼습니다.", "success");
-      } catch (error) {
+      } catch {
         setStatus("상태를 변경하지 못했습니다.", "error");
       }
     }
@@ -540,7 +540,7 @@ function createCard(link, { compact = false } = {}) {
         } else {
           setStatus("링크를 프라이빗 공간으로 이동했습니다.", "success");
         }
-      } catch (error) {
+      } catch {
         setStatus("프라이빗 상태를 변경하지 못했습니다.", "error");
       }
     }
@@ -557,7 +557,7 @@ function createCard(link, { compact = false } = {}) {
         const updatedLinks = await sendMessage(MESSAGE_TYPES.DELETE_LINK, { id: link.id });
         updateLinks(updatedLinks);
         setStatus("삭제했습니다.", "success");
-      } catch (error) {
+      } catch {
         setStatus("삭제하지 못했습니다.", "error");
       }
     }
@@ -919,56 +919,6 @@ function buildTree(links) {
   }
 }
 
-function renderTreeNode(node, depth = 0) {
-  if (node.type === "link") {
-    const card = createCard(node.link, { compact: true });
-    card.style.marginLeft = `${Math.min(depth * 12, 48)}px`;
-    return card;
-  }
-
-  const details = document.createElement("details");
-  details.className = "tree__node";
-  if (depth <= 1) {
-    details.open = true;
-  }
-
-  const summary = document.createElement("summary");
-  if (node.keywords?.length) {
-    summary.title = node.keywords.join(", ");
-  }
-  const label = document.createElement("span");
-  label.className = "tree__label";
-  if (node.badge && node.type === "category") {
-    const icon = document.createElement("span");
-    icon.textContent = node.badge;
-    label.append(icon);
-  } else if (node.badge && node.type === "group") {
-    const badge = document.createElement("span");
-    badge.className = "tree__badge";
-    badge.textContent = node.badge;
-    label.append(badge);
-  }
-  const text = document.createElement("span");
-  text.textContent = node.label;
-  label.append(text);
-
-  const count = document.createElement("span");
-  count.className = "tree__count";
-  count.textContent = `${node.count}`;
-
-  summary.append(label, count);
-  details.append(summary);
-
-  const childrenContainer = document.createElement("div");
-  childrenContainer.className = "tree__children";
-  node.children.forEach((child) => {
-    childrenContainer.append(renderTreeNode(child, depth + 1));
-  });
-
-  details.append(childrenContainer);
-  return details;
-}
-
 function renderTree(filtered) {
   disposeGraph();
   configureContainerForView();
@@ -1151,7 +1101,7 @@ function renderTree(filtered) {
               const updatedLinks = await sendMessage(MESSAGE_TYPES.TOGGLE_PRIVATE, { id: data.id });
               updateLinks(updatedLinks);
               setStatus(data.private ? "프라이빗을 해제했습니다." : "비공개로 전환했습니다.", "success");
-            } catch (error) {
+            } catch {
               setStatus("프라이빗 상태를 변경하지 못했습니다.", "error");
             }
           }
@@ -1167,7 +1117,7 @@ function renderTree(filtered) {
               const updatedLinks = await sendMessage(MESSAGE_TYPES.DELETE_LINK, { id: data.id });
               updateLinks(updatedLinks);
               setStatus("삭제했습니다.", "success");
-            } catch (error) {
+            } catch {
               setStatus("삭제하지 못했습니다.", "error");
             }
           }
@@ -1665,7 +1615,7 @@ async function refreshLinks(showStatus = false) {
     if (showStatus) {
       setStatus("목록을 새로고침했습니다.", "success");
     }
-  } catch (error) {
+  } catch {
     state.isLoading = false;
     renderEmpty("목록을 불러오지 못했습니다.");
     setStatus("목록을 가져오지 못했습니다.", "error");

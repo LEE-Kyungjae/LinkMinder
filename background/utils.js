@@ -35,7 +35,7 @@ export function normalizeUrl(url) {
 export function getDomain(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
-  } catch (error) {
+  } catch {
     return "";
   }
 }
